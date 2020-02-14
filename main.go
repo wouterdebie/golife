@@ -74,8 +74,9 @@ func run() {
 		for col := 0; col < gridWidth; col++ {
 			r := rand.Float64()
 			if r < seed {
-				*cellFromGrid(cellsPtr, col, row) ^= 0x80
-				updateNeighborCount(cellsPtr, &neighborIdxs, col, row, 1)
+				idx := row*gridWidth + col
+				*cellFromGrid(cellsPtr, idx) ^= 0x80
+				updateNeighborCount(cellsPtr, &neighborIdxs, idx, 1)
 			}
 		}
 	}
@@ -98,7 +99,8 @@ func run() {
 func drawBuffer(cellsPtr *[nrOfCells]byte, buffer *image.RGBA) {
 	for row := 0; row < gridHeight; row++ {
 		for col := 0; col < gridWidth; col++ {
-			cell := *cellFromGrid(cellsPtr, col, row)
+			idx := row*gridWidth + col
+			cell := *cellFromGrid(cellsPtr, idx)
 
 			n := cell & 0x7F
 			var c color.Color
@@ -134,37 +136,42 @@ func runRules(cellsPtr *[nrOfCells]byte, nextGenPtr *[nrOfCells]byte,
 	// Copy everything over to new array. This can be optimized by recursively update neighbors
 	for row := 0; row < gridHeight; row++ {
 		for col := 0; col < gridWidth; col++ {
-			cell := cellFromGrid(cellsPtr, col, row)
-			nextCell := cellFromGrid(nextGenPtr, col, row)
+			idx := row*gridWidth + col
+			cell := cellFromGrid(cellsPtr, idx)
+			nextCell := cellFromGrid(nextGenPtr, idx)
 			*nextCell = *cell
 		}
 	}
 
 	for row := 0; row < gridHeight; row++ {
 		for col := 0; col < gridWidth; col++ {
-			cell := cellFromGrid(cellsPtr, col, row)
-			nextCell := cellFromGrid(nextGenPtr, col, row)
-
-			active := (*cell&0x80 == 0x80)
-			neighbors := *cell & 0x7F
-
-			if !active && neighbors == 3 {
-				*nextCell |= (1 << 7)
-				updateNeighborCount(nextGenPtr, neighborIdxs, col, row, 1)
-			} else if active && (neighbors == 3 || neighbors == 2) {
-				// cell stays active
-			} else if active {
-				*nextCell &^= (1 << 7)
-				updateNeighborCount(nextGenPtr, neighborIdxs, col, row, -1)
-			}
+			idx := row*gridWidth + col
+			runRulesForCell(cellsPtr, nextGenPtr, neighborIdxs, idx)
 		}
 	}
 	return cellsPtr, nextGenPtr
 }
 
-func updateNeighborCount(c *[nrOfCells]byte, n *[nrOfCells][]int, col, row, amount int) {
-	idx := row*gridWidth + col
+func runRulesForCell(cellsPtr *[nrOfCells]byte, nextGenPtr *[nrOfCells]byte,
+	neighborIdxs *[nrOfCells][]int, idx int) {
+	cell := cellFromGrid(cellsPtr, idx)
+	nextCell := cellFromGrid(nextGenPtr, idx)
 
+	active := (*cell&0x80 == 0x80)
+	neighbors := *cell & 0x7F
+
+	if !active && neighbors == 3 {
+		*nextCell |= (1 << 7)
+		updateNeighborCount(nextGenPtr, neighborIdxs, idx, 1)
+	} else if active && (neighbors == 3 || neighbors == 2) {
+		// cell stays active
+	} else if active {
+		*nextCell &^= (1 << 7)
+		updateNeighborCount(nextGenPtr, neighborIdxs, idx, -1)
+	}
+}
+
+func updateNeighborCount(c *[nrOfCells]byte, n *[nrOfCells][]int, idx, amount int) {
 	for _, i := range n[idx] {
 		if amount > 0 {
 			c[i]++
@@ -174,8 +181,7 @@ func updateNeighborCount(c *[nrOfCells]byte, n *[nrOfCells][]int, col, row, amou
 	}
 }
 
-func cellFromGrid(c *[nrOfCells]byte, col, row int) *byte {
-	idx := row*gridWidth + col
+func cellFromGrid(c *[nrOfCells]byte, idx int) *byte {
 	return &c[idx]
 }
 
